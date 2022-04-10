@@ -17,65 +17,36 @@ import pandas as pd
 import os
 import ml_helper
 import matplotlib as mp
+import wget
+import helper as h
+import ml_helper as ml_h
+import sklearn
+from sklearn.model_selection import train_test_split
+import matplotlib
+import matplotlib.pyplot as plt
+import time
 
 # ctu13 malware netflow dataset
-# loading and poreparing the dataset
-
-
-# Find files in subdirs with correct extension
-def files_in_dirs(base_dir, extension='.csv'):
-    return_files = []
-    for path, current_directory, files in os.walk(base_dir):
-        for file in files:
-            if file.endswith(extension):
-                return_files.append(os.path.join(path, file))
-    return return_files
-
-# Check if file exists
-def file_exists(path):
-    if os.path.exists(path):
-        return True
-    else:
-        print('ERROR cannot find file ' + path)
-        return False
-
-# Load pandas datafram from data_path
-def pandas_dataframe_load(data_path, n_rows=0):
-    # check if file exists
-    if not(os.path.exists(data_path)):
-        print('ERROR File doesn\'t exist, aborting')
-        exit(0)
-        return false
-
-    # Load data into pandas
-    print('Loading dataset file into pandas frame : ' + data_path)
-    if n_rows==0:
-        data_csv = pd.read_csv(data_path)
-    else:
-        data_csv = pd.read_csv(data_path, n_rows=n_rows)
-
-    print('Loaded dataset')
-
-    return data_csv
-
-# Load dataset into dataframes
-def dataframes_load(base_dir, extension, n_rows=False, concatenate=True):
-    # Find all dataset files with correct extension in any subfolder
-    dataset_paths = files_in_dirs(base_dir, extension)
-
-    df_return = []
-    for dataset_path in dataset_paths:
-        df_return.append(pandas_dataframe_load(dataset_path, n_rows))
-
-    # Concatenate all datasets into one
-    if concatenate:
-        df_return = pd.concat(df_return)
-    return df_return
+# loading and preparing the dataset
 
 
 # Pipeline to prepare dataset
-def ctu_preparing(df):
+def ctu_preparing(df, label):
+    # Proto,  (['StartTime', 'Dur', 'Proto', 'SrcAddr', 'Sport', 'Dir', 'DstAddr','Dport', 'State', 'sTos', 'dTos', 'TotPkts', 'TotBytes', 'SrcBytes','Label'],
+    # Proto,  (['StartTime', '', '', 'SrcAddr', 'Sport', , 'DstAddr','Dport',,, 'State'
+    categorical = []    # 'Proto', 'Dir', 'sTos', 'dTos'
+    numerical = []      # 'Dur', , 'TotPkts', 'TotBytes', 'SrcBytes',
+    to_time = []
+    bin = []
+
+    # Cast types
+    df['StartTime'] = pd.to_datetime(df['StartTime'])
+    df[label].astype('int16').dtypes
+
+    # How to handle ports and ip?
+
     # Handle empty values
+
 
     # Bin values
 
@@ -83,21 +54,53 @@ def ctu_preparing(df):
 
     # Create new features
 
-    # Create train, val, test 80,10,10 with the same percentage of cats in all
+    # Create train, val, test 70,10,20 with the same percentage of cats in all
+    y = df[label]
+    print(y.head())
 
-    #
+    train, test_val, train_y, test_val_y  = train_test_split(df, y, test_size=0.3, stratify=y)
+    val, test, val_y, test_y = train_test_split(test_val, test_val_y, test_size=0.67, stratify=test_val_y)
 
-    return df
+    # Drop labels, where ToDo some targets?
+    train.drop(['Label'], axis='columns', inplace=True)
+    val.drop(['Label'], axis='columns', inplace=True)
+    test.drop(['Label'], axis='columns', inplace=True)
 
+    print('\n\n ########       train val test      ######## \n')
+    print(str(train.shape) + ' ' + str(val.shape) + ' ' + str(test.shape))
+    print(train.head())
+    print(val.head())
+    print(test.head())
+    print(train_y.head())
+    print(val_y.head())
+    print(test_y.head())
+
+    return train, val, test, train_y, val_y, test_y
 
 
 if __name__ == "__main__":
     DATASET_BASEDIR = r'C:\ai\datasets\ctu13\CTU-13-Dataset'
+    URL_CTU13 = r'''https://mcfp.felk.cvut.cz/publicDatasets/CTU-13-Dataset/CTU-13-Dataset.tar.bz2'''  # Download and extract the data into your DATASET_BASEDIR
     FILE_EXTENSION = '.binetflow'
-    N_ROWS = 0
+    N_ROWS = 7700          # Rows to get from each of the dataset files
+    #N_ROWS = None
     CONCATENATE = True
+    EXPLORE_FILE = 'ctu13_explore.html'
+    LABEL = 'target'
+    LABEL_FROM = 'Label'
+    SUBSTRING = 'botnet'
 
-    df = dataframes_load(DATASET_BASEDIR, FILE_EXTENSION, N_ROWS, CONCATENATE)
+    times = []
+    start_time = time.time()
+
+    # Download CTU13 dataset
+    #h.download_file(URL_CTU13, DATASET_BASEDIR)
+    # Extract the data ToDo low prio
+
+    df = ml_h.dataframes_load(DATASET_BASEDIR, FILE_EXTENSION, N_ROWS, CONCATENATE)
+
+    # Create new target(label) column , (botnet, normal, background) I only use the first 2
+    ml_h.df_column_create_contains_text(df, LABEL, LABEL_FROM, SUBSTRING)
 
     # Check if df is a list of dfs
     if type(df) == list:
@@ -105,26 +108,35 @@ if __name__ == "__main__":
             print(df_.shape)
     else:
         print('Not a list')
+        print(df.shape)
 
-    exit(0)
+    for col in df:
+        print(df[col].value_counts())
 
-    print('\ncolumns')
-    print(df.columns)
+    ml_h.pandas_dataframe_describe(df)
 
-    column = ''
-
-    print(df['Label'].name)
-    labels = df['Label'].unique()
-
-    for label in labels:
-        print(label)
+    print(df[LABEL].value_counts())
 
 
-    #ml_helper.pandas_dataframe_describe(df)
+    train, val, test, train_y, val_y, test_y = ctu_preparing(df, LABEL)
 
-    #df_small = df.sample(n=1000)
+    times.append(time.time())
+    print('\n Seconds')
+    for time0 in times:
+        print(str(time0 - start_time))
+
+
+    '''
+    matplotlib.use('Qt5Agg')
+    df.hist(bins=100, figsize=(20, 15), log=True)
+    #save_fig("attribute_histogram_plots")
+    plt.show()
+    '''
+
+    # all records that contains NaN values
+    #sample_incomplete_rows = housing[housing.isnull().any(axis=1)].head()
 
     # Explore dataframe
-    #ml_helper.dataframe_explore(df_small, dst_file, explorative=False, minimal=False)
+    #ml_h.dataframe_explore(df, EXPLORE_FILE, explorative=False, minimal=True)
 
 
